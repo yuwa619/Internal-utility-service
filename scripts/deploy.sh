@@ -38,12 +38,9 @@ ENV_FILE="${APP_DIR}/.env"
 HEALTH_RETRIES=30
 HEALTH_SLEEP=2
 
-# Nginx config path — works for both Amazon Linux (conf.d) and Ubuntu (sites-*)
-if [ -f /etc/nginx/sites-available/internal-utility-service ]; then
-    NGINX_CONF="/etc/nginx/sites-available/internal-utility-service"
-else
-    NGINX_CONF="/etc/nginx/conf.d/internal-utility-service.conf"
-fi
+# Nginx config — bootstrap.conf is copied here on first deploy by ci.yml.
+# Certbot may later rewrite this file to add SSL; the upstream block persists.
+NGINX_CONF="/etc/nginx/nginx.conf"
 
 # Use sudo for docker if the current user isn't in the docker group yet
 # (group membership only takes effect on next login after first bootstrap)
