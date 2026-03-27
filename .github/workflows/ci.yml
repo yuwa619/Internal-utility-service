@@ -167,7 +167,8 @@ jobs:
             fi
 
             cd /opt/internal-utility-service
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             # ── Write minimal HTTP-only Nginx config (no SSL yet) ────────────
             # SSL is added later via Certbot. This config works immediately
