@@ -126,44 +126,69 @@ jobs:
           script: |
             set -e
 
+            # ── Detect OS (Ubuntu vs Amazon Linux) ───────────────────────────
+            OS_ID=$(. /etc/os-release && echo "$ID")
+
+            pkg_install() {
+              if [[ "$OS_ID" == "amzn" ]]; then
+                sudo yum install -y "$@"
+              else
+                sudo apt-get update -y && sudo apt-get install -y "$@"
+              fi
+            }
+
             # ── Install Docker if not present ────────────────────────────────
             if ! command -v docker &> /dev/null; then
-              curl -fsSL https://get.docker.com | sudo sh
-              sudo usermod -aG docker $USER
+              if [[ "$OS_ID" == "amzn" ]]; then
+                sudo yum install -y docker
+              else
+                curl -fsSL https://get.docker.com | sudo sh
+              fi
+              sudo systemctl enable docker
+              sudo systemctl start docker
+              sudo usermod -aG docker "$USER"
             fi
 
             # ── Install Nginx if not present ─────────────────────────────────
             if ! command -v nginx &> /dev/null; then
-              sudo apt-get update -y
-              sudo apt-get install -y nginx
+              pkg_install nginx
               sudo systemctl enable nginx
               sudo systemctl start nginx
             fi
+
+            # ── Install Git if not present ───────────────────────────────────
+            command -v git &> /dev/null || pkg_install git
 
             # ── Clone repo on first deploy, pull on subsequent deploys ───────
             if [ ! -d /opt/internal-utility-service ]; then
               sudo git clone https://github.com/yuwa619/Internal-utility-service.git \
                 /opt/internal-utility-service
-              sudo chown -R $USER:$USER /opt/internal-utility-service
+              sudo chown -R "$USER":"$USER" /opt/internal-utility-service
             fi
 
             cd /opt/internal-utility-service
             git pull origin main
 
-            # ── Copy Nginx config if not already in place ────────────────────
-            if [ ! -f /etc/nginx/sites-available/internal-utility-service ]; then
-              sudo cp nginx/nginx.conf \
-                /etc/nginx/sites-available/internal-utility-service
-              sudo rm -f /etc/nginx/sites-enabled/default
-              sudo ln -sf /etc/nginx/sites-available/internal-utility-service \
-                /etc/nginx/sites-enabled/
+            # ── Copy Nginx config (Amazon Linux uses conf.d, Ubuntu uses sites-*) ──
+            if [[ "$OS_ID" == "amzn" ]]; then
+              NGINX_CONF="/etc/nginx/conf.d/internal-utility-service.conf"
+            else
+              NGINX_CONF="/etc/nginx/sites-available/internal-utility-service"
+            fi
+
+            if [ ! -f "$NGINX_CONF" ]; then
+              sudo cp nginx/nginx.conf "$NGINX_CONF"
+              if [[ "$OS_ID" != "amzn" ]]; then
+                sudo rm -f /etc/nginx/sites-enabled/default
+                sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
+              fi
               sudo nginx -t && sudo systemctl reload nginx
             fi
 
-            # ── Ensure .env exists (from example if missing) ─────────────────
+            # ── Ensure .env exists ────────────────────────────────────────────
             [ -f .env ] || cp .env.example .env
 
-            # ── Run blue-green deploy ────────────────────────────────────────
+            # ── Run blue-green deploy ─────────────────────────────────────────
             chmod +x scripts/deploy.sh
             DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} \
               bash scripts/deploy.sh
