@@ -169,7 +169,9 @@ jobs:
             cd /opt/internal-utility-service
             git pull origin main
 
-            # ── Copy Nginx config (Amazon Linux uses conf.d, Ubuntu uses sites-*) ──
+            # ── Write minimal HTTP-only Nginx config (no SSL yet) ────────────
+            # SSL is added later via Certbot. This config works immediately
+            # and proxies port 80 → the active blue/green container.
             if [[ "$OS_ID" == "amzn" ]]; then
               NGINX_CONF="/etc/nginx/conf.d/internal-utility-service.conf"
             else
@@ -177,7 +179,27 @@ jobs:
             fi
 
             if [ ! -f "$NGINX_CONF" ]; then
-              sudo cp nginx/nginx.conf "$NGINX_CONF"
+              sudo tee "$NGINX_CONF" > /dev/null << 'NGINXEOF'
+            upstream app {
+                server 127.0.0.1:5001;
+            }
+            server {
+                listen 80;
+                server_name _;
+                location / {
+                    proxy_pass         http://app;
+                    proxy_http_version 1.1;
+                    proxy_set_header   Host              $host;
+                    proxy_set_header   X-Real-IP         $remote_addr;
+                    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+                    proxy_set_header   X-Forwarded-Proto $scheme;
+                }
+                location /health {
+                    proxy_pass http://app/health;
+                    access_log off;
+                }
+            }
+            NGINXEOF
               if [[ "$OS_ID" != "amzn" ]]; then
                 sudo rm -f /etc/nginx/sites-enabled/default
                 sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/

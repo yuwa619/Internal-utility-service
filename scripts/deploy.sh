@@ -33,11 +33,25 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 APP_DIR="/opt/internal-utility-service"
 IMAGE="${DOCKERHUB_USERNAME}/internal-utility-service:latest"
-NGINX_CONF="/etc/nginx/sites-available/internal-utility-service"
 COLOR_FILE="${APP_DIR}/ACTIVE_COLOR"
 ENV_FILE="${APP_DIR}/.env"
 HEALTH_RETRIES=30
 HEALTH_SLEEP=2
+
+# Nginx config path — works for both Amazon Linux (conf.d) and Ubuntu (sites-*)
+if [ -f /etc/nginx/sites-available/internal-utility-service ]; then
+    NGINX_CONF="/etc/nginx/sites-available/internal-utility-service"
+else
+    NGINX_CONF="/etc/nginx/conf.d/internal-utility-service.conf"
+fi
+
+# Use sudo for docker if the current user isn't in the docker group yet
+# (group membership only takes effect on next login after first bootstrap)
+if docker ps &>/dev/null 2>&1; then
+    DOCKER="docker"
+else
+    DOCKER="sudo docker"
+fi
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,15 +95,15 @@ log "Active: ${ACTIVE_COLOR} (port ${OLD_PORT})  →  Deploying: ${NEW_COLOR} (p
 # Step 1: Pull the new image
 # ---------------------------------------------------------------------------
 log "Pulling image: ${IMAGE}"
-docker pull "${IMAGE}"
+$DOCKER pull "${IMAGE}"
 
 # ---------------------------------------------------------------------------
 # Step 2: Start the inactive colour
 # ---------------------------------------------------------------------------
 log "Starting container: internal-utility-${NEW_COLOR}"
-docker rm -f "internal-utility-${NEW_COLOR}" 2>/dev/null || true
+$DOCKER rm -f "internal-utility-${NEW_COLOR}" 2>/dev/null || true
 
-docker run -d \
+$DOCKER run -d \
     --name "internal-utility-${NEW_COLOR}" \
     --restart unless-stopped \
     -p "${NEW_PORT}:5000" \
@@ -104,7 +118,7 @@ wait_for_health "${NEW_PORT}"
 # ---------------------------------------------------------------------------
 # Step 4: Save the previous image tag for rollback
 # ---------------------------------------------------------------------------
-PREVIOUS_IMAGE=$(docker inspect --format='{{.Config.Image}}' \
+PREVIOUS_IMAGE=$($DOCKER inspect --format='{{.Config.Image}}' \
     "internal-utility-${OLD_COLOR}" 2>/dev/null || echo "${IMAGE}")
 echo "${PREVIOUS_IMAGE}" > "${APP_DIR}/PREVIOUS_IMAGE"
 echo "${OLD_COLOR}"       > "${APP_DIR}/PREVIOUS_COLOR"
@@ -124,8 +138,8 @@ log "Nginx reloaded — traffic now routed to ${NEW_COLOR} (port ${NEW_PORT})."
 # Step 6: Stop and remove the old container
 # ---------------------------------------------------------------------------
 log "Stopping old container: internal-utility-${OLD_COLOR}"
-docker stop "internal-utility-${OLD_COLOR}" 2>/dev/null || true
-docker rm   "internal-utility-${OLD_COLOR}" 2>/dev/null || true
+$DOCKER stop "internal-utility-${OLD_COLOR}" 2>/dev/null || true
+$DOCKER rm   "internal-utility-${OLD_COLOR}" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Step 7: Record new active colour
@@ -134,5 +148,5 @@ echo "${NEW_COLOR}" > "${COLOR_FILE}"
 
 log "Deployment complete.  Active: ${NEW_COLOR} on port ${NEW_PORT}."
 
-# Prune old images to keep the host clean (keep last 2)
-docker image prune -f --filter "until=48h" || true
+# Prune old images to keep the host clean
+$DOCKER image prune -f --filter "until=48h" || true
