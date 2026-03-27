@@ -10,7 +10,6 @@ def get_secret(secret_name):
     """
     try:
         import boto3
-        from botocore.exceptions import ClientError
 
         region = os.environ.get("AWS_REGION", "us-east-1")
         client = boto3.client("secretsmanager", region_name=region)
