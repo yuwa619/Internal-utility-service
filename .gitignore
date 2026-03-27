@@ -1,0 +1,37 @@
+# Secrets — never commit
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Test / lint artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Blue-green state files (generated at runtime on EC2)
+ACTIVE_COLOR
+PREVIOUS_COLOR
+PREVIOUS_PORT
+PREVIOUS_IMAGE

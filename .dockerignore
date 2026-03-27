@@ -1,0 +1,41 @@
+# Version control
+.git
+.gitignore
+
+# Python artefacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+dist
+build
+
+# Virtual environments
+venv
+env
+.venv
+
+# Secrets / local config — never bake into the image
+.env
+.env.*
+*.env
+
+# Test & lint artefacts
+tests
+.pytest_cache
+.coverage
+htmlcov
+.flake8
+
+# Editor / OS artefacts
+.DS_Store
+.idea
+.vscode
+*.swp
+
+# CI/CD metadata
+.github
+
+# Docs (not needed at runtime)
+*.md
